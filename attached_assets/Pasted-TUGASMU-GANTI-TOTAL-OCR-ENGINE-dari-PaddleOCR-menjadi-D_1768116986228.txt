@@ -1,0 +1,104 @@
+TUGASMU: GANTI TOTAL OCR ENGINE dari PaddleOCR menjadi DeepSeek-OCR, TANPA opsi memilih engine. PaddleOCR tidak boleh dipakai lagi.
+
+Repo DeepSeek: https://github.com/deepseek-ai/DeepSeek-OCR
+
+TARGET
+- Worker behavior tetap sama: poll Supabase jobs -> download image dari R2 -> OCR -> upload JSON ke R2 -> update Supabase status.
+- Output JSON harus kompatibel dengan format output worker lama (yang sekarang dihasilkan oleh `build_ocr_output`).
+- Tapi engine yang dipakai harus DeepSeek-OCR.
+
+WAJIB: REPLACE TOTAL
+1) Hapus semua penggunaan PaddleOCR:
+   - Jangan import PaddleOCR.
+   - Jangan pakai `get_ocr_instance()` versi paddle.
+   - Hapus/abaikan setting `OCR_LANG`, `OCR_DET_LIMIT_SIDE_LEN`, `OCR_USE_ANGLE_CLS`, threshold paddle.
+2) Semua fungsi OCR di `workers/ocr/ocr_engine.py` harus menjadi wrapper DeepSeek-OCR:
+   - `run_ocr(image_bytes)` harus memanggil DeepSeek OCR.
+   - `run_ocr_with_tiling(image_bytes, ...)` harus memanggil DeepSeek OCR + tiling.
+   - `run_ocr_adaptive(image_bytes)` harus memanggil DeepSeek OCR + tiling adaptif (wajib).
+3) `workers/ocr/main.py` jangan berubah flow-nya, tapi dia tetap memanggil fungsi yang sama, hanya implementasinya sekarang DeepSeek.
+
+DEEPSEEK OCR IMPLEMENTATION
+- Jalankan DeepSeek-OCR secara lokal:
+  - Prefer vLLM inference jika dependency memungkinkan.
+  - Jika tidak, gunakan transformers inference.
+- Gunakan decoding stabil:
+  - temperature=0
+  - max_new_tokens dibatasi (default 800, bisa diubah lewat env).
+- Prompt harus ketat agar tidak mengarang, tidak translate, tidak paraphrase.
+  Gunakan prompt default ini untuk setiap tile:
+  "You are an OCR engine. Transcribe the EXACT visible English text from the image.
+   Rules:
+   - Output ONLY the transcription, do NOT translate or paraphrase.
+   - Keep original punctuation and capitalization.
+   - If unclear, write [UNK].
+   - Do NOT add any extra words not clearly visible.
+   - Preserve line breaks when text is visually separated.
+   Return JSON ONLY in schema: {\"lines\":[{\"text\":\"...\"}]}"
+
+TILING (WAJIB UNTUK WEBTOON PANJANG)
+- Karena gambar bisa sangat tinggi, implement tiling vertikal:
+  - Default TILE_HEIGHT=3000
+  - Default OVERLAP=350
+- Jika tinggi gambar <= 3500: OCR langsung tanpa tiling.
+- Jika 3501–12000: TILE_HEIGHT=3000, OVERLAP=350
+- Jika >12000: TILE_HEIGHT=2500, OVERLAP=350
+- Semua angka di atas bisa dioverride env:
+  - TILE_HEIGHT, TILE_OVERLAP
+  - ADAPTIVE_H1=3500, ADAPTIVE_H2=12000
+  - TILE_HEIGHT_MED=3000, TILE_HEIGHT_LONG=2500
+
+MERGE + DEDUP (WAJIB)
+- Karena overlap, tile bisa mengembalikan teks yang sama.
+- Implement dedup ringan:
+  - Normalize text: trim, collapse spaces, uppercase.
+  - Jika normalized text sama dan muncul di tile bersebelahan: keep satu saja.
+  - Tambahkan optional similarity ratio > 0.92 jika mudah.
+- Urutkan hasil akhir berdasarkan urutan tile dan urutan line di tile (top-to-bottom).
+
+OUTPUT JSON (HARUS KOMPATIBEL)
+Gunakan fungsi `build_ocr_output(...)` yang ada, tapi ubah field engine menjadi:
+engine: {
+  "name": "deepseek-ocr",
+  "model": "<model/checkpoint>",
+  "mode": "tile",
+  "prompt_version": "v1"
+}
+Untuk setiap line:
+- "text": string
+- "confidence": null
+- "bbox": null
+(jika DeepSeek tidak memberi bbox/conf)
+
+ENV VARS BARU (WAJIB DITAMBAHKAN)
+- DEEPSEEK_MODEL_PATH atau DEEPSEEK_CHECKPOINT (wajib)
+- DEEPSEEK_MAX_NEW_TOKENS (default 800)
+- DEEPSEEK_TEMPERATURE (default 0)
+- DEEPSEEK_TILE_HEIGHT (default 3000)
+- DEEPSEEK_TILE_OVERLAP (default 350)
+- DEEPSEEK_ADAPTIVE_H1 (default 3500)
+- DEEPSEEK_ADAPTIVE_H2 (default 12000)
+- DEEPSEEK_TILE_HEIGHT_MED (default 3000)
+- DEEPSEEK_TILE_HEIGHT_LONG (default 2500)
+- OCR_DEBUG (0/1), DEBUG_DIR (default ./debug)
+
+DEPENDENCIES
+- Update requirements.txt agar DeepSeek-OCR bisa jalan:
+  - torch
+  - transformers
+  - accelerate
+  - (vllm jika dipakai)
+- Pastikan proyek tetap bisa install di Replit.
+
+DEBUG MODE
+Jika OCR_DEBUG=1:
+- Simpan tile images ke DEBUG_DIR
+- Simpan raw model output string ke file
+- Simpan final JSON
+
+DELIVERABLE
+1) Implement perubahan code lengkap (edit file yang ada, jangan buat sistem pilihan engine).
+2) Update README: cara set env + cara run + catatan performa GPU vs CPU.
+3) Tambahkan script test `python workers/ocr/test_one.py <image_path>` untuk memastikan DeepSeek OCR menghasilkan JSON.
+
+SEKARANG: lakukan refactor dan tulis semua file yang diperlukan agar worker ini memakai DeepSeek-OCR sebagai OCR engine utama (PaddleOCR tidak digunakan sama sekali).

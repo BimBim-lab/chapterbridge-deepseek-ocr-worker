@@ -1,0 +1,30 @@
+modules = ["python-3.11"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["gcc", "libGL", "libGLU", "libgcc", "openssl", "xorg.libX11", "zlib"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "OCR Worker"
+
+[[workflows.workflow]]
+name = "OCR Worker"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python workers/ocr/main.py --poll-seconds 3"
+
+[workflows.workflow.metadata]
+outputType = "console"
