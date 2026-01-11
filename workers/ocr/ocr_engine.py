@@ -157,47 +157,31 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         prompt = f"<image>\n{DEEPSEEK_PROMPT}"
         
         if hasattr(model, 'infer'):
-            # Create temp directory for model output
+            # Use model.infer() with save_results=True to get text output
             import tempfile
-            import io
-            import sys
             
             with tempfile.TemporaryDirectory() as temp_output_dir:
-                # Capture stdout to get the OCR text that model prints
-                old_stdout = sys.stdout
-                sys.stdout = captured_output = io.StringIO()
-                
-                try:
-                    result = model.infer(
-                        tokenizer, 
-                        prompt=prompt, 
-                        image_file=temp_path,
-                        output_path=temp_output_dir,
-                        base_size=1024,
-                        image_size=640,
-                        crop_mode=False,
-                        save_results=False,  # Don't save files, just get text
-                        test_compress=False
-                    )
-                finally:
-                    # Restore stdout
-                    sys.stdout = old_stdout
-                    
-                # Get the printed output
-                printed_text = captured_output.getvalue()
+                result = model.infer(
+                    tokenizer, 
+                    prompt=prompt, 
+                    image_file=temp_path,
+                    output_path=temp_output_dir,
+                    base_size=1024,
+                    image_size=640,
+                    crop_mode=False,
+                    save_results=True,  # Must be True to get text output
+                    test_compress=False
+                )
             
-            # model.infer() prints text but returns None, use captured stdout
-            if result is None and printed_text:
-                response_text = printed_text
-                logger.info(f"[Tile {tile_idx}] Captured printed output ({len(response_text)} chars)")
-            elif isinstance(result, str):
+            # model.infer() returns text when save_results=True
+            if result and isinstance(result, str):
                 response_text = result
-                logger.info(f"[Tile {tile_idx}] model.infer() returned string ({len(response_text)} chars)")
+                logger.info(f"[Tile {tile_idx}] model.infer() returned text ({len(response_text)} chars)")
             else:
-                response_text = printed_text if printed_text else ""
-                logger.warning(f"[Tile {tile_idx}] Fallback to captured output ({len(response_text)} chars)")
+                response_text = str(result) if result else ""
+                logger.warning(f"[Tile {tile_idx}] Unexpected return type: {type(result)}")
             
-            logger.info(f"[Tile {tile_idx}] Final response_text: {response_text[:200]}")
+            logger.info(f"[Tile {tile_idx}] Response preview: {response_text[:200]}")
         else:
             from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(
