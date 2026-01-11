@@ -157,12 +157,11 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         prompt = f"<image>\n{DEEPSEEK_PROMPT}"
         
         if hasattr(model, 'infer'):
-            # Use model.infer() with save_results=True to save OCR results to disk
+            # model.infer() returns the OCR result directly
             import tempfile
-            import glob
             
             with tempfile.TemporaryDirectory() as temp_output_dir:
-                model.infer(
+                res = model.infer(
                     tokenizer, 
                     prompt=prompt, 
                     image_file=temp_path,
@@ -170,20 +169,13 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
                     base_size=1024,
                     image_size=640,
                     crop_mode=False,
-                    save_results=True,  # Saves text to files in output_path
+                    save_results=True,
                     test_compress=False
                 )
-                
-                # Read saved OCR results from output directory
-                txt_files = glob.glob(os.path.join(temp_output_dir, "*.txt"))
-                if txt_files:
-                    with open(txt_files[0], 'r', encoding='utf-8') as f:
-                        response_text = f.read().strip()
-                    logger.info(f"[Tile {tile_idx}] Read {len(response_text)} chars from {os.path.basename(txt_files[0])}")
-                else:
-                    response_text = ""
-                    logger.warning(f"[Tile {tile_idx}] No .txt files found in {temp_output_dir}")
             
+            # Use the returned result
+            response_text = res if res else ""
+            logger.info(f"[Tile {tile_idx}] model.infer() returned: {type(res)} with {len(str(response_text))} chars")
             logger.info(f"[Tile {tile_idx}] Response preview: {response_text[:200]}")
         else:
             from transformers import AutoProcessor
