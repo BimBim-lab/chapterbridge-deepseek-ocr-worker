@@ -135,17 +135,20 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         prompt = f"<image>\n{DEEPSEEK_PROMPT}"
         
         if hasattr(model, 'infer'):
-            result = model.infer(
-                tokenizer, 
-                prompt=prompt, 
-                image_file=temp_path,
-                output_path=None,  # Don't save debug output
-                base_size=1024,
-                image_size=640,
-                crop_mode=False,
-                save_results=False,
-                test_compress=False
-            )
+            # Create temp directory for model output (will be ignored)
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_output_dir:
+                result = model.infer(
+                    tokenizer, 
+                    prompt=prompt, 
+                    image_file=temp_path,
+                    output_path=temp_output_dir,  # Use temp dir instead of None
+                    base_size=1024,
+                    image_size=640,
+                    crop_mode=False,
+                    save_results=False,
+                    test_compress=False
+                )
             response_text = result if isinstance(result, str) else str(result)
         else:
             from transformers import AutoProcessor
