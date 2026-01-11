@@ -19,8 +19,8 @@ _tokenizer = None
 DEBUG_MODE = os.environ.get("OCR_DEBUG", "0") == "1"
 DEBUG_DIR = os.environ.get("OCR_DEBUG_DIR", "debug")
 
-# Simple prompt matching DeepSeek-OCR official examples
-DEEPSEEK_PROMPT = "Free OCR."
+# Simple prompt for English-only OCR
+DEEPSEEK_PROMPT = "Extract only English text from this image. Ignore all non-English characters."
 
 
 def get_deepseek_model():
@@ -142,32 +142,45 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         if hasattr(model, 'infer'):
             # Create temp directory for model output
             import tempfile
+            import io
+            import sys
+            
             with tempfile.TemporaryDirectory() as temp_output_dir:
-                result = model.infer(
-                    tokenizer, 
-                    prompt=prompt, 
-                    image_file=temp_path,
-                    output_path=temp_output_dir,
-                    base_size=1024,
-                    image_size=640,
-                    crop_mode=False,
-                    save_results=True,  # Changed to True to capture output
-                    test_compress=False
-                )
+                # Capture stdout to get the OCR text that model prints
+                old_stdout = sys.stdout
+                sys.stdout = captured_output = io.StringIO()
+                
+                try:
+                    result = model.infer(
+                        tokenizer, 
+                        prompt=prompt, 
+                        image_file=temp_path,
+                        output_path=temp_output_dir,
+                        base_size=1024,
+                        image_size=640,
+                        crop_mode=False,
+                        save_results=False,  # Don't save files, just get text
+                        test_compress=False
+                    )
+                finally:
+                    # Restore stdout
+                    sys.stdout = old_stdout
+                    
+                # Get the printed output
+                printed_text = captured_output.getvalue()
             
-            # Log what model.infer() returned
-            logger.info(f"[Tile {tile_idx}] model.infer() returned type: {type(result)}, value: {result}")
-            
-            # Check if result is None or empty
-            if result is None:
-                logger.warning(f"[Tile {tile_idx}] model.infer() returned None!")
-                response_text = ""
+            # model.infer() prints text but returns None, use captured stdout
+            if result is None and printed_text:
+                response_text = printed_text
+                logger.info(f"[Tile {tile_idx}] Captured printed output ({len(response_text)} chars)")
             elif isinstance(result, str):
                 response_text = result
+                logger.info(f"[Tile {tile_idx}] model.infer() returned string ({len(response_text)} chars)")
             else:
-                response_text = str(result)
+                response_text = printed_text if printed_text else ""
+                logger.warning(f"[Tile {tile_idx}] Fallback to captured output ({len(response_text)} chars)")
             
-            logger.info(f"[Tile {tile_idx}] response_text ({len(response_text)} chars): {response_text}")
+            logger.info(f"[Tile {tile_idx}] Final response_text: {response_text[:200]}")
         else:
             from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(
