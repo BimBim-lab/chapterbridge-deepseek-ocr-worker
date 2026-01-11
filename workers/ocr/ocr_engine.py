@@ -53,6 +53,10 @@ def get_deepseek_model():
             use_safetensors=True
         )
         
+        # Set pad_token_id to suppress warnings
+        if _model.config.pad_token_id is None:
+            _model.config.pad_token_id = _model.config.eos_token_id
+        
         if torch.cuda.is_available():
             _model = _model.eval().cuda().to(torch.bfloat16)
             logger.info("DeepSeek-OCR loaded on CUDA with bfloat16")
@@ -77,6 +81,11 @@ def parse_ocr_response(response_text: str) -> List[Dict[str, Any]]:
     """
     lines = []
     
+    # Handle None or empty response
+    if not response_text or response_text.strip() in ["None", "null", ""]:
+        return []
+    
+    # Try to parse JSON response
     json_match = re.search(r'\{[\s\S]*"lines"[\s\S]*\}', response_text)
     if json_match:
         try:
@@ -85,7 +94,7 @@ def parse_ocr_response(response_text: str) -> List[Dict[str, Any]]:
                 for item in data["lines"]:
                     if isinstance(item, dict) and "text" in item:
                         text = item["text"].strip()
-                        if text:
+                        if text and text not in ["None", "null"]:
                             lines.append({
                                 "text": text,
                                 "confidence": None,
@@ -95,9 +104,11 @@ def parse_ocr_response(response_text: str) -> List[Dict[str, Any]]:
         except json.JSONDecodeError:
             pass
     
+    # Fallback: parse line by line
     for line in response_text.strip().split('\n'):
         line = line.strip()
-        if line and not line.startswith('{') and not line.startswith('"lines"'):
+        # Skip empty, JSON structure lines, and "None" responses
+        if line and not line.startswith('{') and not line.startswith('"lines"') and line not in ["None", "null"]:
             lines.append({
                 "text": line,
                 "confidence": None,
@@ -171,6 +182,9 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
             
             response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
         
+        # Always log raw response for debugging
+        logger.debug(f"[Tile {tile_idx}] Raw model response: {response_text[:500]}")
+        
         if DEBUG_MODE:
             debug_path = os.path.join(DEBUG_DIR, f"tile_{tile_idx}_response.txt")
             os.makedirs(DEBUG_DIR, exist_ok=True)
@@ -179,6 +193,10 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
             logger.debug(f"Saved raw response to {debug_path}")
         
         lines = parse_ocr_response(response_text)
+        
+        # Log if no lines extracted
+        if not lines:
+            logger.warning(f"[Tile {tile_idx}] No text extracted from response. Raw response: {response_text}")
         
         if DEBUG_MODE:
             logger.info(f"Tile {tile_idx}: extracted {len(lines)} lines")
