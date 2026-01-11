@@ -169,8 +169,9 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
                     base_size=1024,
                     image_size=640,
                     crop_mode=False,
-                    save_results=True,
-                    test_compress=False
+                    save_results=False,
+                    test_compress=False,
+                    eval_mode=True  # CRITICAL: Returns text instead of printing to stdout
                 )
             
             # Use the returned result
