@@ -139,6 +139,7 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
                 tokenizer, 
                 prompt=prompt, 
                 image_file=temp_path,
+                output_path=None,  # Don't save debug output
                 base_size=1024,
                 image_size=640,
                 crop_mode=False,
