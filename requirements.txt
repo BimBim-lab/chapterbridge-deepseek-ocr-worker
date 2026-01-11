@@ -1,6 +1,12 @@
 torch>=2.0.0
-transformers>=4.40.0
+transformers>=4.40.0,<4.46.0
 accelerate>=0.26.0
+flash-attn>=2.5.0
+easydict
+einops
+addict
+matplotlib
+torchvision
 boto3>=1.28.0
 supabase>=2.0.0
 python-dotenv>=1.0.0
