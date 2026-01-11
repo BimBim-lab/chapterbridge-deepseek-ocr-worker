@@ -19,10 +19,11 @@ _tokenizer = None
 DEBUG_MODE = os.environ.get("OCR_DEBUG", "0") == "1"
 DEBUG_DIR = os.environ.get("OCR_DEBUG_DIR", "debug")
 
-DEEPSEEK_PROMPT = """You are an OCR engine. Transcribe the EXACT visible English text from the image.
+DEEPSEEK_PROMPT = """You are an OCR engine. Transcribe ALL visible text from the image in its original language.
 Rules:
-- Output ONLY the transcription, do NOT translate or paraphrase.
-- Keep original punctuation and capitalization.
+- Output text EXACTLY as it appears (Korean, English, Japanese, Chinese, or any language).
+- Do NOT translate or paraphrase.
+- Keep original punctuation and formatting.
 - If unclear, write [UNK].
 - Do NOT add any extra words not clearly visible.
 - Preserve line breaks when text is visually separated.
@@ -146,24 +147,34 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         prompt = f"<image>\n{DEEPSEEK_PROMPT}"
         
         if hasattr(model, 'infer'):
-            # Create temp directory for model output (will be ignored)
+            # Create temp directory for model output
             import tempfile
             with tempfile.TemporaryDirectory() as temp_output_dir:
                 result = model.infer(
                     tokenizer, 
                     prompt=prompt, 
                     image_file=temp_path,
-                    output_path=temp_output_dir,  # Use temp dir instead of None
+                    output_path=temp_output_dir,
                     base_size=1024,
                     image_size=640,
                     crop_mode=False,
-                    save_results=False,
+                    save_results=True,  # Changed to True to capture output
                     test_compress=False
                 )
-            response_text = result if isinstance(result, str) else str(result)
             
-            # ALWAYS log raw response from model.infer() path
-            logger.info(f"[Tile {tile_idx}] Raw model.infer() response ({len(response_text)} chars): {response_text}")
+            # Log what model.infer() returned
+            logger.info(f"[Tile {tile_idx}] model.infer() returned type: {type(result)}, value: {result}")
+            
+            # Check if result is None or empty
+            if result is None:
+                logger.warning(f"[Tile {tile_idx}] model.infer() returned None!")
+                response_text = ""
+            elif isinstance(result, str):
+                response_text = result
+            else:
+                response_text = str(result)
+            
+            logger.info(f"[Tile {tile_idx}] response_text ({len(response_text)} chars): {response_text}")
         else:
             from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(
