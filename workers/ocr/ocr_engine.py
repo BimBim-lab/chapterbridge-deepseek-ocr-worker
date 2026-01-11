@@ -19,15 +19,8 @@ _tokenizer = None
 DEBUG_MODE = os.environ.get("OCR_DEBUG", "0") == "1"
 DEBUG_DIR = os.environ.get("OCR_DEBUG_DIR", "debug")
 
-DEEPSEEK_PROMPT = """You are an OCR engine. Transcribe ALL visible text from the image in its original language.
-Rules:
-- Output text EXACTLY as it appears (Korean, English, Japanese, Chinese, or any language).
-- Do NOT translate or paraphrase.
-- Keep original punctuation and formatting.
-- If unclear, write [UNK].
-- Do NOT add any extra words not clearly visible.
-- Preserve line breaks when text is visually separated.
-Return JSON ONLY in schema: {"lines":[{"text":"..."}]}"""
+# Simple prompt matching DeepSeek-OCR official examples
+DEEPSEEK_PROMPT = "Free OCR."
 
 
 def get_deepseek_model():
