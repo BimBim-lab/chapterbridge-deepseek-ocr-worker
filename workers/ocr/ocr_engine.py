@@ -161,6 +161,9 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
                     test_compress=False
                 )
             response_text = result if isinstance(result, str) else str(result)
+            
+            # ALWAYS log raw response from model.infer() path
+            logger.info(f"[Tile {tile_idx}] Raw model.infer() response ({len(response_text)} chars): {response_text}")
         else:
             from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(
