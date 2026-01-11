@@ -182,8 +182,8 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
             
             response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
         
-        # Always log raw response for debugging
-        logger.debug(f"[Tile {tile_idx}] Raw model response: {response_text[:500]}")
+        # ALWAYS log raw response to understand what model returns
+        logger.info(f"[Tile {tile_idx}] Raw model response ({len(response_text)} chars): {response_text}")
         
         if DEBUG_MODE:
             debug_path = os.path.join(DEBUG_DIR, f"tile_{tile_idx}_response.txt")
