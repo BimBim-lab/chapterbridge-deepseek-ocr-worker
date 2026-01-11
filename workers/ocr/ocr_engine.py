@@ -98,11 +98,28 @@ def parse_ocr_response(response_text: str) -> List[Dict[str, Any]]:
         except json.JSONDecodeError:
             pass
     
-    # Fallback: parse line by line
+    # Fallback: parse line by line, filtering debug output
+    debug_patterns = [
+        "directly resize",
+        "=====================",
+        "BASE:",
+        "torch.Size",
+        "NO PATCHES",
+        "save results",
+        "image:",
+        "other:",
+        "it/s]",
+        "0it [00:00"
+    ]
+    
     for line in response_text.strip().split('\n'):
         line = line.strip()
-        # Skip empty, JSON structure lines, and "None" responses
-        if line and not line.startswith('{') and not line.startswith('"lines"') and line not in ["None", "null"]:
+        
+        # Skip debug output lines
+        is_debug = any(pattern in line for pattern in debug_patterns)
+        
+        # Skip empty, JSON structure lines, debug output, and "None" responses
+        if line and not line.startswith('{') and not line.startswith('"lines"') and line not in ["None", "null"] and not is_debug:
             lines.append({
                 "text": line,
                 "confidence": None,
