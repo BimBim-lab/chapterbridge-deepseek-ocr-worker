@@ -157,11 +157,12 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
         prompt = f"<image>\n{DEEPSEEK_PROMPT}"
         
         if hasattr(model, 'infer'):
-            # Use model.infer() with save_results=True to get text output
+            # Use model.infer() with save_results=True to save OCR results to disk
             import tempfile
+            import glob
             
             with tempfile.TemporaryDirectory() as temp_output_dir:
-                result = model.infer(
+                model.infer(
                     tokenizer, 
                     prompt=prompt, 
                     image_file=temp_path,
@@ -169,17 +170,19 @@ def run_ocr_on_tile(tile_image: Image.Image, tile_idx: int = 0) -> List[Dict[str
                     base_size=1024,
                     image_size=640,
                     crop_mode=False,
-                    save_results=True,  # Must be True to get text output
+                    save_results=True,  # Saves text to files in output_path
                     test_compress=False
                 )
-            
-            # model.infer() returns text when save_results=True
-            if result and isinstance(result, str):
-                response_text = result
-                logger.info(f"[Tile {tile_idx}] model.infer() returned text ({len(response_text)} chars)")
-            else:
-                response_text = str(result) if result else ""
-                logger.warning(f"[Tile {tile_idx}] Unexpected return type: {type(result)}")
+                
+                # Read saved OCR results from output directory
+                txt_files = glob.glob(os.path.join(temp_output_dir, "*.txt"))
+                if txt_files:
+                    with open(txt_files[0], 'r', encoding='utf-8') as f:
+                        response_text = f.read().strip()
+                    logger.info(f"[Tile {tile_idx}] Read {len(response_text)} chars from {os.path.basename(txt_files[0])}")
+                else:
+                    response_text = ""
+                    logger.warning(f"[Tile {tile_idx}] No .txt files found in {temp_output_dir}")
             
             logger.info(f"[Tile {tile_idx}] Response preview: {response_text[:200]}")
         else:
